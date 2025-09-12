@@ -130,13 +130,15 @@ contract RebaseTokenTest is Test {
         rebaseToken.setInterestRate(newInterestRate);
     }
 
-    // function testCannotCallMintAndBurn() public {
-    //     vm.prank(user);
-    //     vm.expectPartialRevert(IAccessControl.AccessControlUnauthorizedAccount.selector);
-    //     rebaseToken.mint(user, 100, rebaseToken.getInterestRate());
-    //     vm.expectPartialRevert(IAccessControl.AccessControlUnauthorizedAccount.selector);
-    //     rebaseToken.burn(user, 100);
-    // }
+    function testCannotCallMintAndBurn() public {
+        uint256 interestRate = rebaseToken.getInterestRate();
+        vm.prank(user);
+        vm.expectPartialRevert(IAccessControl.AccessControlUnauthorizedAccount.selector);
+        rebaseToken.mint(user, 100, interestRate);
+
+        vm.expectPartialRevert(IAccessControl.AccessControlUnauthorizedAccount.selector);
+        rebaseToken.burn(user, 100);
+    }
 
     function testGetPrincipalAmount(uint256 amount) public {
         amount = bound(amount, 1e5, type(uint96).max);
