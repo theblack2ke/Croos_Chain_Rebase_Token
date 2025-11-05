@@ -1,88 +1,41 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
+
+pragma solidity ^0.8.24;
 
 import {Script} from "forge-std/Script.sol";
-import {Vault} from "src/Vault.sol";
-import {IRebaseToken} from "src/interfaces/IRebaseToken.sol";
-import {RebaseToken} from "src/RebaseToken.sol";
-import {RebaseTokenPool} from "src/RebaseTokenPool.sol";
-
-import {CCIPLocalSimulatorFork, Register} from "@chainlink-local/src/ccip/CCIPLocalSimulatorFork.sol";
-import {IERC20} from "@ccip/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
-import {RegistryModuleOwnerCustom} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/RegistryModuleOwnerCustom.sol";
-import {TokenAdminRegistry} from "@ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
+import {RebaseToken} from "../src/RebaseToken.sol";
+import {RebaseTokenPool} from "../src/RebaseTokenPool.sol";
+import {Vault} from "../src/Vault.sol";
+import {IERC20} from "lib/ccip/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+import {IRebaseToken} from "../src/interfaces/IRebaseToken.sol";
+import {CCIPLocalSimulatorFork, Register} from "@chainlink/local/src/ccip/CCIPLocalSimulatorFork.sol";
+import {RegistryModuleOwnerCustom} from "lib/ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/RegistryModuleOwnerCustom.sol";
+import {TokenAdminRegistry} from "lib/ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/TokenAdminRegistry.sol";
 
 contract TokenAndPoolDeployer is Script {
-    function run() public returns (RebaseToken token, RebaseTokenPool pool) {
-        CCIPLocalSimulatorFork ccipLocalSimulatorFork = new CCIPLocalSimulatorFork();
-        Register.NetworkDetails memory tokenNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
-
-        // first deploy the token then the pool in ccip way
+    function run() public returns (RebaseToken rbt, RebaseTokenPool rbtPool) {
+        CCIPLocalSimulatorFork ccip = new CCIPLocalSimulatorFork();
+        Register.NetworkDetails memory netWorkDetails = ccip.getNetworkDetails(
+            block.chainid
+        );
         vm.startBroadcast();
-        token = new RebaseToken();
-        pool = new RebaseTokenPool(
-            IERC20(address(token)),
+        rbt = new RebaseToken();
+        rbtPool = new RebaseTokenPool(
+            IERC20(address(rbt)),
             new address[](0),
-            tokenNetworkDetails.rmnProxyAddress,
-            tokenNetworkDetails.routerAddress
+            netWorkDetails.rmnProxyAddress,
+            netWorkDetails.routerAddress
         );
-        vm.stopBroadcast();
-        return (token, pool);
-    }
-}
-
-contract SetRole is Script {
-    function run(address _rebaseToken, address _rebaseTokenPool) public {
-        grantRole(_rebaseToken, _rebaseTokenPool);
-    }
-
-    function grantRole(address token, address pool) public {
-        vm.startBroadcast();
-        IRebaseToken(token).grantMintAndBurnRole(address(pool));
-        vm.stopBroadcast();
-    }
-}
-
-contract SetAdmin is Script {
-    function run(address token) public {
-        setRegistryOwner(token);
-    }
-
-    function setRegistryOwner(address token) public {
-        CCIPLocalSimulatorFork ccipLocalSimulatorFork = new CCIPLocalSimulatorFork();
-        Register.NetworkDetails memory tokenNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
-        vm.startBroadcast();
-        RegistryModuleOwnerCustom(tokenNetworkDetails.registryModuleOwnerCustomAddress).registerAdminViaOwner(
-            address(token)
+        rbt.grantMintAndBurnRole(address(rbtPool));
+        RegistryModuleOwnerCustom(
+            netWorkDetails.registryModuleOwnerCustomAddress
+        ).registerAdminViaOwner(address(rbt));
+        TokenAdminRegistry(netWorkDetails.tokenAdminRegistryAddress)
+            .acceptAdminRole(address(rbt));
+        TokenAdminRegistry(netWorkDetails.tokenAdminRegistryAddress).setPool(
+            address(rbt),
+            address(rbtPool)
         );
-        vm.stopBroadcast();
-    }
-}
-
-contract SetTokenAdmin is Script {
-    function run(address token) public {
-        setTokenAdminSetRole(token);
-    }
-
-    function setTokenAdminSetRole(address token) public {
-        CCIPLocalSimulatorFork ccipLocalSimulatorFork = new CCIPLocalSimulatorFork();
-        Register.NetworkDetails memory tokenNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
-        vm.startBroadcast();
-        TokenAdminRegistry(tokenNetworkDetails.tokenAdminRegistryAddress).acceptAdminRole(address(token));
-        vm.stopBroadcast();
-    }
-}
-
-contract SetTokenAdminSetPool is Script {
-    function run(address token, address pool) public {
-        setTokenAdminSetPool(token, pool);
-    }
-
-    function setTokenAdminSetPool(address token, address pool) public {
-        CCIPLocalSimulatorFork ccipLocalSimulatorFork = new CCIPLocalSimulatorFork();
-        Register.NetworkDetails memory tokenNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
-        vm.startBroadcast();
-        TokenAdminRegistry(tokenNetworkDetails.tokenAdminRegistryAddress).setPool(address(token), address(pool));
         vm.stopBroadcast();
     }
 }
